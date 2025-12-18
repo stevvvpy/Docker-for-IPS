@@ -1,0 +1,94 @@
+services:
+  api-gateway:
+    image: nginx:stable-alpine
+    container_name: api-gateway
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth-service
+      - acad-service
+    networks:
+      - microservices-network
+    ports:
+      - "8081:80"
+
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    environment:
+      - PORT=3001
+      - MONGO_URI=mongodb://auth-db:27017/auth
+      - JWT_SECRET=286e917d5d078da958bb60713be95a68dcd429b71d57eb5012c51e2a
+      - NODE_ENV=development
+    depends_on:
+      - auth-db
+    networks:
+      - microservices-network
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./auth-service:/app
+      - /app/node_modules
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  auth-db:
+    image: mongo:6.0
+    container_name: auth-db
+    restart: always
+    volumes:
+      - auth-data:/data/db
+    networks:
+      - microservices-network
+    ports:
+      - "27017:27017"
+
+  acad-service:
+    build: ./acad-service
+    container_name: acad-service
+    environment:
+      - DB_HOST=acad-db
+      - DB_PORT=5432
+      - DB_NAME=products
+      - DB_USER=productuser
+      - DB_PASSWORD=productpass
+    depends_on:
+      - acad-db
+    networks:
+      - microservices-network
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./acad-service:/app
+      - /app/__pycache__
+
+  acad-db:
+    image: postgres:15-alpine
+    container_name: acad-db
+    environment:
+      - POSTGRES_DB=products
+      - POSTGRES_USER=productuser
+      - POSTGRES_PASSWORD=productpass
+    restart: always
+    volumes:
+      - product-data:/var/lib/postgresql/data
+      - ./acad-service/db_kelas.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - microservices-network
+    ports:
+      - "5432:5432"
+
+networks:
+  microservices-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.0.0/28
+
+volumes:
+  auth-data:
+  product-data:
+  order-data:
